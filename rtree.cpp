@@ -3,12 +3,6 @@
 #include <boost/geometry/geometries/box.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/geometry/index/detail/rtree/utilities/statistics.hpp>
-/*#include <boost/archive/binary_oarchive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/xml_oarchive.hpp>
-#include <boost/archive/xml_iarchive.hpp>
-#include <boost/serialization/vector.hpp>
-*/
 #include <boost/foreach.hpp>
 
 #include <bits/stdc++.h>
@@ -19,7 +13,7 @@ namespace bgi = boost::geometry::index;
 using namespace std;
 using namespace std::chrono;
 
-#define CAPACITY 10
+#define CAPACITY 100
 
 void createQuerySet(string fileName, vector<tuple<float, float, float, float>> &queryArray) {
 	string line;
@@ -33,43 +27,28 @@ void createQuerySet(string fileName, vector<tuple<float, float, float, float>> &
 			buf >> xl >> xh >> yl >> yh;
 			queryArray.emplace_back(make_tuple(xl, xh, yl, yh));
 			i++;
-			if (i >= 100000) break;
+			if (i >= 500000) break;
 		}
 	}
 	file.close();
 } 
-
-/*template <typename T, size_t I = 0, size_t S = tuple_size<T>::value>
-struct print_tuple{
-	template <typename Os>
-	static inline Os & apply(Os & os, T const& t){
-		os << get<I>(t) << ", ";
-	    return print_tuple<T, I+1>::apply(os, t);
-	}
-};
-
-template <typename T, size_t S>
-struct print_tuple<T, S, S>{
-	template <typename Os>
-	static inline Os & apply(Os & os, T const&){
-		return os;
-	}
-};*/
 
 int main(){
 	typedef bg::model::point<float, 2, bg::cs::cartesian> point;
 	typedef bg::model::box<point> box;
 	typedef pair<box, unsigned> value;
 
-	// create the rtree using default constructor
+	vector<float> boundary = {180.0, -90.0, 180.0, 90.0};
+	
 	vector<tuple<float, float, float, float>> queryArray;        
 	createQuerySet("aisSample", queryArray);	 
 
+	// index construction
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
 	//bgi::rtree<value, bgi::rstar<40,20>> rtree;
 	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
 	for (int q = 0; q < queryArray.size(); q++){
-		box b(point(get<0>(queryArray[q]), get<1>(queryArray[q])), point(get<0>(queryArray[q]), get<1>(queryArray[q]))); // create a box
+		box b(point(get<1>(queryArray[q]), get<0>(queryArray[q])), point(get<1>(queryArray[q]), get<0>(queryArray[q]))); // create a box
 		rtree.insert(make_pair(b, q)); // insert new value
 	}
 	double time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
@@ -78,34 +57,52 @@ int main(){
 	queryArray.clear();
 	createQuerySet("aisSampleQR1000", queryArray);	 
 
-	// find values intersecting some area defined by a box
-	startTime = high_resolution_clock::now();
-	for (auto q: queryArray){
-		box query_box(point(get<0>(q), get<1>(q)), point(get<2>(q), get<3>(q)));
-		//box query_box(point(0,0), point(1,1));			
-		vector<value> result_s;
-		rtree.query(bgi::intersects(query_box), back_inserter(result_s));
-	}
-	time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
-	cout << "Range query time: " << time << endl;
+	// range queries
+	vector<float> ranges = {0.0025, 0.005, 0.01, 0.02, 0.04, 0.08};
+	for (auto rs: ranges){
+		time = 0;
+		for (auto q: queryArray){
+			float pl[2], ph[2];
+			pl[0] = get<2>(q) - 0.01;         
+			pl[1] = get<1>(q) - 0.01;
 
-	// find 5 nearest values to a point
-	startTime = high_resolution_clock::now();
-	for (auto q: queryArray){
-		vector<value> result_n;
-		rtree.query(bgi::nearest(point(get<0>(q), get<1>(q)), 5), back_inserter(result_n));
-	}
-	time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
-	cout << "KNN query time: " << time << endl;
+  			ph[0] = min(boundary[2], pl[0] + rs*(boundary[2] + abs(boundary[0])));
+  			ph[1] = min(boundary[3], pl[1] + rs*(boundary[3] + abs(boundary[1])));
 
-	//typedef tuple<size_t, size_t, size_t, size_t, size_t, size_t> S;
+			startTime = high_resolution_clock::now();
+			box query_box(point(pl[0], pl[1]), point(ph[0], ph[1]));
+			vector<value> result_s;
+			rtree.query(bgi::intersects(query_box), back_inserter(result_s));
+			time += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+
+		}
+		cout << rs << " range query time: " << time << endl;
+	}
+	
+	// kNN queries
+	vector<int> kappas = {1, 4, 16, 64};
+	for (auto k: kappas){
+		startTime = high_resolution_clock::now();
+		for (auto q: queryArray){
+			vector<value> result_n;
+			rtree.query(bgi::nearest(point(get<1>(q), get<0>(q)), k), back_inserter(result_n));
+		}
+		time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+		cout << k << " NN query time: " << time << endl;
+	}
+
+	// get statistics and size
 	tuple<size_t, size_t, size_t, size_t, size_t, size_t> S;
-	//S s;
-	//print_tuple<S>::apply(cout, bgi::detail::rtree::utilities::statistics(rtree)) << endl;
 	S = bgi::detail::rtree::utilities::statistics(rtree);
 
-	cout << get<0>(S) << endl;
-
+	cout << "Number of levels: " << get<0>(S) << endl;  
+	cout << "Number of internal nodes: " << get<1>(S) << endl;  
+	cout << "Number of leaf nodes: " << get<2>(S) << endl;  
+	cout << "Number of values: " << get<3>(S) << endl;  
+	cout << "Min values per node: " << get<4>(S) << endl;  
+	cout << "Max values per node: " << get<5>(S) << endl;  
+	cout << "RTree size in MB: " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
+									+ get<1>(S) * get<4>(S) * 8) / float(1e6)<< endl; // pointer size
 
 
 	// note: in Boost.Geometry WKT representation of a box is polygon
