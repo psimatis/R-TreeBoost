@@ -11,8 +11,63 @@ namespace bgi = boost::geometry::index;
 
 using namespace std;
 using namespace std::chrono;
+namespace bgid = bgi::detail;
 
 #define CAPACITY 100
+
+int pointerCount = 0;
+
+template <typename Value, typename Options, typename Translator, typename Box, typename Allocators>
+class test_visitor
+    : public bgid::rtree::visitor<Value, typename Options::parameters_type, Box, Allocators, typename Options::node_tag, true>::type
+{
+    typedef typename bgid::rtree::internal_node<Value, typename Options::parameters_type, Box, Allocators, typename Options::node_tag>::type internal_node;
+    typedef typename bgid::rtree::leaf<Value, typename Options::parameters_type, Box, Allocators, typename Options::node_tag>::type leaf;
+
+public:
+    void operator()(internal_node const& n){
+        typedef typename bgid::rtree::elements_type<internal_node>::type elements_type;
+        elements_type const& elements = bgid::rtree::elements(n);
+
+		//cout << "internal " << elements.size() << endl;
+		pointerCount += elements.size();
+        for ( typename elements_type::const_iterator it = elements.begin(); it != elements.end() ; ++it){
+            //handle_box_or_value(it->first);
+            bgid::rtree::apply_visitor(*this, *(it->second));
+        }
+        //cout << "----" << endl;
+    }
+
+    void operator()(leaf const& n){
+        typedef typename bgid::rtree::elements_type<leaf>::type elements_type;
+        elements_type const& elements = bgid::rtree::elements(n);
+
+		//cout << "leaf " << elements.size() << endl;
+        //for ( typename elements_type::const_iterator it = elements.begin();it != elements.end() ; ++it){
+            //handle_box_or_value(*it);
+        //}
+    }
+
+    template <typename BoxOrValue>
+    void handle_box_or_value(BoxOrValue const& b){
+        cout << bg::dsv(b) << endl;
+    }
+};
+
+template <typename Rtree>
+inline void pointerVisitor(Rtree const& tree){
+    typedef bgid::rtree::utilities::view<Rtree> RTV;
+    RTV rtv(tree);
+
+    test_visitor<
+        typename RTV::value_type,
+        typename RTV::options_type,
+        typename RTV::translator_type,
+        typename RTV::box_type,
+        typename RTV::allocators_type
+    > v;   
+    rtv.apply_visitor(v);
+}
 
 void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray) {
 	string line;
@@ -52,25 +107,22 @@ void parseQueryFile(string fileName, vector<tuple<char, float, float, float>> &q
 int main(){
 	typedef bg::model::point<float, 2, bg::cs::cartesian> point;
 	typedef bg::model::box<point> box;
-	typedef pair<box, unsigned> value;
-
+	typedef pair<point, unsigned> value;
+	
 	vector<float> boundary = {180.0, -90.0, 180.0, 90.0};
 	
 	vector<tuple<int, float, float>> dataArray;        
 	parseDataFile("data/aisCleanSample1e6.txt", dataArray);	 
 
-	cout << "#Data: " << dataArray.size() << endl;
-
 	vector<tuple<char, float, float, float>> queryArray;        
-	parseQueryFile("test.txt", queryArray);	 
+	parseQueryFile("data/queriesI0Shuffled.txt", queryArray);	 
 
-	// index construction
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
 	//bgi::rtree<value, bgi::rstar<40,20>> rtree;
 	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
 	for (auto q: dataArray){
-		box b(point(get<2>(q), get<1>(q)), point(get<2>(q), get<1>(q))); // create a box
-		rtree.insert(make_pair(b, get<0>(q))); // insert new value
+		point p(get<2>(q), get<1>(q));
+		rtree.insert(make_pair(p, get<0>(q))); // insert new value
 	}
 	double time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 	cout << "Creation time: " << time << endl;
@@ -92,14 +144,14 @@ int main(){
 			rtree.query(bgi::intersects(query_box), back_inserter(result_s));
 			rangeLog["time " + to_string(rs)] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			rangeLog["count " + to_string(rs)]++;
-			cout << "spatial query box:" << endl;
-			cout << bg::wkt<box>(query_box) << endl;
+			//cout << "spatial query box:" << endl;
+			//cout << bg::wkt<box>(query_box) << endl;
 			//cout << "spatial query result:" << endl;
-			int rCount = 0;
-			BOOST_FOREACH(value const& v, result_s)
-				rCount++;
+			//int rCount = 0;
+			//BOOST_FOREACH(value const& v, result_s)
+				//rCount++;
 				//cout << bg::wkt<box>(v.first) << " - " << v.second << endl;
-			cout << rCount << endl;
+			//cout << rCount << endl;
 		}
 		else if (get<0>(q) == 'k'){
 			startTime = high_resolution_clock::now();
@@ -116,14 +168,15 @@ int main(){
 		}
 	}
 
+	cout << "---Range---" << endl;
 	for (auto it = rangeLog.cbegin(); it != rangeLog.cend(); ++it)  
 		cout<< it->first << ": " << it->second << endl;   
 
+	cout << "---KNN---" << endl;
 	for (auto it = knnLog.cbegin(); it != knnLog.cend(); ++it)  
-			cout<< it->first << ": " << it->second << endl;   
-	
+			cout<< it->first << ": " << it->second << endl; 
 
-	// get statistics and size
+	cout << "---Statistics---" << endl;
 	tuple<size_t, size_t, size_t, size_t, size_t, size_t> S;
 	S = bgi::detail::rtree::utilities::statistics(rtree);
 
@@ -133,8 +186,11 @@ int main(){
 	cout << "Number of values: " << get<3>(S) << endl;  
 	cout << "Min values per node: " << get<4>(S) << endl;  
 	cout << "Max values per node: " << get<5>(S) << endl;  
-	cout << "RTree size in MB: " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
-									+ get<1>(S) * get<4>(S) * 8) / float(1e6)<< endl; // pointer size
-									
+
+	pointerVisitor(rtree);
+	cout << "pointerCount: " << pointerCount << endl;
+	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
+	 											+ pointerCount * 8) / float(1e6)<< endl; // pointer size
+	 									 									
 	return 0;
 }
