@@ -30,9 +30,11 @@ public:
         elements_type const& elements = bgid::rtree::elements(n);
 
 		//cout << "internal " << elements.size() << endl;
-		pointerCount += elements.size();
+		handle_box_or_value(elements.size());
+
         for ( typename elements_type::const_iterator it = elements.begin(); it != elements.end() ; ++it){
             //handle_box_or_value(it->first);
+            //cout << "size of node pointer in bytes: " << sizeof(it->second) << endl; // 8 bytes
             bgid::rtree::apply_visitor(*this, *(it->second));
         }
         //cout << "----" << endl;
@@ -48,9 +50,8 @@ public:
         //}
     }
 
-    template <typename BoxOrValue>
-    void handle_box_or_value(BoxOrValue const& b){
-        cout << bg::dsv(b) << endl;
+	void handle_box_or_value(int c){
+        pointerCount += c;
     }
 };
 
@@ -71,6 +72,7 @@ inline void pointerVisitor(Rtree const& tree){
 
 void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray) {
 	string line;
+	//int i = 0;
 	ifstream file(fileName);
 	if (file.is_open()) {
 		getline(file, line);
@@ -80,6 +82,8 @@ void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray)
 			istringstream buf(line);
 			buf >> id >> x >> y;
 			dataArray.emplace_back(make_tuple(id, x, y));
+			//i++;
+			//if (i >= 5000) break;
 		}
 		file.close();
 	} else cout << "Cant open file: " << fileName << endl;
@@ -97,8 +101,6 @@ void parseQueryFile(string fileName, vector<tuple<char, float, float, float>> &q
 			istringstream buf(line);
 			buf >> type >> x >> y >> size;
 			queryArray.emplace_back(make_tuple(type, x, y, size));
-			i++;
-			if (i >= 500000) break;
 		}
 		file.close();
 	} else cout << "Cant open file: " << fileName << endl;
@@ -112,17 +114,18 @@ int main(){
 	vector<float> boundary = {180.0, -90.0, 180.0, 90.0};
 	
 	vector<tuple<int, float, float>> dataArray;        
-	parseDataFile("data/aisCleanSample1e6.txt", dataArray);	 
+	parseDataFile("aisCleanSample1e6.txt", dataArray);	 
 
 	vector<tuple<char, float, float, float>> queryArray;        
-	parseQueryFile("data/queriesI0Shuffled.txt", queryArray);	 
+	parseQueryFile("queriesI0Shuffled.txt", queryArray);	 
 
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
-	//bgi::rtree<value, bgi::rstar<40,20>> rtree;
+
+	//bgi::rtree<value, bgi::rstar<CAPACITY,20>> rtree; //the second parameter is the min utilization of the nodes. default = 30%
 	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
 	for (auto q: dataArray){
 		point p(get<2>(q), get<1>(q));
-		rtree.insert(make_pair(p, get<0>(q))); // insert new value
+		rtree.insert(make_pair(p, get<0>(q)));
 	}
 	double time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 	cout << "Creation time: " << time << endl;
@@ -138,12 +141,13 @@ int main(){
   			ph[0] = min(boundary[2], pl[0] + rs*(boundary[2] + abs(boundary[0])));
   			ph[1] = min(boundary[3], pl[1] + rs*(boundary[3] + abs(boundary[1])));
 
-			startTime = high_resolution_clock::now();
-			box query_box(point(pl[0], pl[1]), point(ph[0], ph[1]));
 			vector<value> result_s;
-			rtree.query(bgi::intersects(query_box), back_inserter(result_s));
+			box queryBox(point(pl[0], pl[1]), point(ph[0], ph[1]));
+			startTime = high_resolution_clock::now();
+			rtree.query(bgi::intersects(queryBox), back_inserter(result_s));
 			rangeLog["time " + to_string(rs)] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			rangeLog["count " + to_string(rs)]++;
+			
 			//cout << "spatial query box:" << endl;
 			//cout << bg::wkt<box>(query_box) << endl;
 			//cout << "spatial query result:" << endl;
@@ -154,9 +158,10 @@ int main(){
 			//cout << rCount << endl;
 		}
 		else if (get<0>(q) == 'k'){
-			startTime = high_resolution_clock::now();
 			vector<value> result_n;
-			rtree.query(bgi::nearest(point(get<2>(q), get<1>(q)), get<3>(q)), back_inserter(result_n));
+			point queryPoint(point(get<2>(q), get<1>(q)));
+			startTime = high_resolution_clock::now();
+			rtree.query(bgi::nearest(queryPoint, get<3>(q)), back_inserter(result_n));
 			knnLog["time " + to_string( get<3>(q))] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			knnLog["count " + to_string(get<3>(q))]++;
 			
@@ -188,9 +193,9 @@ int main(){
 	cout << "Max values per node: " << get<5>(S) << endl;  
 
 	pointerVisitor(rtree);
-	cout << "pointerCount: " << pointerCount << endl;
+	cout << "Internal pointer count: " << pointerCount << endl;
 	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
-	 											+ pointerCount * 8) / float(1e6)<< endl; // pointer size
+	 											+ pointerCount * 8) / float(1e6)<< endl; // internal pointer size
 	 									 									
 	return 0;
 }
