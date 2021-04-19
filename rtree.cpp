@@ -106,7 +106,13 @@ void parseQueryFile(string fileName, vector<tuple<char, float, float, float>> &q
 	} else cout << "Cant open file: " << fileName << endl;
 } 
 
-int main(){
+int main(int argc, char** argv){
+
+	if (argc != 3){
+		cout << "Usage: ./rtree dataFile queryFile" << endl;
+		exit(1);
+	}
+	
 	typedef bg::model::point<float, 2, bg::cs::cartesian> point;
 	typedef bg::model::box<point> box;
 	typedef pair<point, unsigned> value;
@@ -114,15 +120,14 @@ int main(){
 	vector<float> boundary = {180.0, -90.0, 180.0, 90.0};
 	
 	vector<tuple<int, float, float>> dataArray;        
-	parseDataFile("aisCleanSample1e6.txt", dataArray);	 
+	parseDataFile(argv[1], dataArray);	 
 
-	vector<tuple<char, float, float, float>> queryArray;        
-	parseQueryFile("queriesI0Shuffled.txt", queryArray);	 
+	vector<tuple<char, float, float, float>> queryArray;        	 
+	parseQueryFile(argv[2], queryArray);	 
 
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
-
-	//bgi::rtree<value, bgi::rstar<CAPACITY,20>> rtree; //the second parameter is the min utilization of the nodes. default = 30%
-	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
+	//bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
+	bgi::rtree<value, bgi::linear<CAPACITY>> rtree;
 	for (auto q: dataArray){
 		point p(get<2>(q), get<1>(q));
 		rtree.insert(make_pair(p, get<0>(q)));
@@ -148,28 +153,28 @@ int main(){
 			rangeLog["time " + to_string(rs)] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			rangeLog["count " + to_string(rs)]++;
 			
-			//cout << "spatial query box:" << endl;
-			//cout << bg::wkt<box>(query_box) << endl;
+			cout << "spatial query box:" << endl;
+			cout << bg::wkt<box>(queryBox) << endl;
 			//cout << "spatial query result:" << endl;
-			//int rCount = 0;
-			//BOOST_FOREACH(value const& v, result_s)
-				//rCount++;
+			int rCount = 0;
+			BOOST_FOREACH(value const& v, result_s)
+				rCount++;
 				//cout << bg::wkt<box>(v.first) << " - " << v.second << endl;
-			//cout << rCount << endl;
+			cout << rCount << endl;
 		}
 		else if (get<0>(q) == 'k'){
 			vector<value> result_n;
 			point queryPoint(point(get<2>(q), get<1>(q)));
 			startTime = high_resolution_clock::now();
 			rtree.query(bgi::nearest(queryPoint, get<3>(q)), back_inserter(result_n));
-			knnLog["time " + to_string( get<3>(q))] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+			knnLog["time " + to_string(get<3>(q))] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			knnLog["count " + to_string(get<3>(q))]++;
-			
-			//cout << "knn query point:" << endl;
-			//cout << bg::wkt<point>(point(0, 0)) << endl;
+
+			cout << "knn query: " << bg::wkt<point>(point(queryPoint)) << endl;
 			//cout << "knn query result:" << endl;
-			//BOOST_FOREACH(value const& v, result_n)
-			//	cout << bg::wkt<box>(v.first) << " - " << v.second << endl;
+			BOOST_FOREACH(value const& v, result_n)
+				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+				//cout << bg::wkt<box>(v.first) << " - " << v.second << endl;
 		}
 	}
 
