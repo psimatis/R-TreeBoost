@@ -15,10 +15,10 @@ namespace bgid = bgi::detail;
 
 #define CAPACITY 100
 
+// Visitor that counts the number of pointers in the RTree
 int pointerCount = 0;
-
 template <typename Value, typename Options, typename Translator, typename Box, typename Allocators>
-class test_visitor
+class pointer_visitor
     : public bgid::rtree::visitor<Value, typename Options::parameters_type, Box, Allocators, typename Options::node_tag, true>::type
 {
     typedef typename bgid::rtree::internal_node<Value, typename Options::parameters_type, Box, Allocators, typename Options::node_tag>::type internal_node;
@@ -29,29 +29,11 @@ public:
         typedef typename bgid::rtree::elements_type<internal_node>::type elements_type;
         elements_type const& elements = bgid::rtree::elements(n);
 
-		//cout << "internal " << elements.size() << endl;
-		handle_box_or_value(elements.size());
+		pointerCount += elements.size();
 
         for ( typename elements_type::const_iterator it = elements.begin(); it != elements.end() ; ++it){
-            //handle_box_or_value(it->first);
-            //cout << "size of node pointer in bytes: " << sizeof(it->second) << endl; // 8 bytes
             bgid::rtree::apply_visitor(*this, *(it->second));
         }
-        //cout << "----" << endl;
-    }
-
-    void operator()(leaf const& n){
-        typedef typename bgid::rtree::elements_type<leaf>::type elements_type;
-        elements_type const& elements = bgid::rtree::elements(n);
-
-		//cout << "leaf " << elements.size() << endl;
-        //for ( typename elements_type::const_iterator it = elements.begin();it != elements.end() ; ++it){
-            //handle_box_or_value(*it);
-        //}
-    }
-
-	void handle_box_or_value(int c){
-        pointerCount += c;
     }
 };
 
@@ -60,7 +42,7 @@ inline void pointerVisitor(Rtree const& tree){
     typedef bgid::rtree::utilities::view<Rtree> RTV;
     RTV rtv(tree);
 
-    test_visitor<
+    pointer_visitor<
         typename RTV::value_type,
         typename RTV::options_type,
         typename RTV::translator_type,
@@ -126,8 +108,10 @@ int main(int argc, char** argv){
 	parseQueryFile(argv[2], queryArray);	 
 
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
-	//bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
-	bgi::rtree<value, bgi::linear<CAPACITY>> rtree;
+	//bgi::rtree<value, bgi::linear<CAPACITY>> rtree;
+	//bgi::rtree<value, bgi::quadratic<CAPACITY>> rtree;
+	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
+
 	for (auto q: dataArray){
 		point p(get<2>(q), get<1>(q));
 		rtree.insert(make_pair(p, get<0>(q)));
@@ -155,12 +139,9 @@ int main(int argc, char** argv){
 			
 			cout << "spatial query box:" << endl;
 			cout << bg::wkt<box>(queryBox) << endl;
-			//cout << "spatial query result:" << endl;
-			int rCount = 0;
+			cout << "spatial query results:" << endl;
 			BOOST_FOREACH(value const& v, result_s)
-				rCount++;
-				//cout << bg::wkt<box>(v.first) << " - " << v.second << endl;
-			cout << rCount << endl;
+				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
 		else if (get<0>(q) == 'k'){
 			vector<value> result_n;
@@ -170,11 +151,10 @@ int main(int argc, char** argv){
 			knnLog["time " + to_string(get<3>(q))] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			knnLog["count " + to_string(get<3>(q))]++;
 
-			cout << "knn query: " << bg::wkt<point>(point(queryPoint)) << endl;
-			//cout << "knn query result:" << endl;
-			BOOST_FOREACH(value const& v, result_n)
-				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
-				//cout << bg::wkt<box>(v.first) << " - " << v.second << endl;
+			//cout << "knn query: " << bg::wkt<point>(point(queryPoint)) << endl;
+			//cout << "knn query results:" << endl;
+			//BOOST_FOREACH(value const& v, result_n)
+				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
 	}
 
