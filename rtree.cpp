@@ -105,12 +105,17 @@ int main(int argc, char** argv){
 	vector<tuple<char, float, float, float>> queryArray;        	 
 	parseQueryFile(argv[2], queryArray);	 
 
-	high_resolution_clock::time_point startTime = high_resolution_clock::now();
-	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
+	vector<point> contourCenters;
+	vector<value> cloud;
 	for (auto q: dataArray){
 		point p(get<2>(q), get<1>(q));
-		rtree.insert(make_pair(p, get<0>(q)));
+		contourCenters.push_back(p);
 	}
+	high_resolution_clock::time_point startTime = high_resolution_clock::now();
+	size_t id_gen = 0;
+	transform(contourCenters.begin(), contourCenters.end(), back_inserter(cloud), 
+	          [&](point const& p) { return make_pair(p, id_gen++); });
+	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree(cloud.begin(), cloud.end());
 	double time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 	cout << "Creation time: " << time << endl;
 
