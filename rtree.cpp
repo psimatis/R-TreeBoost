@@ -1,7 +1,4 @@
 #include <boost/geometry.hpp>
-#include <boost/geometry/geometries/point.hpp>
-#include <boost/geometry/geometries/box.hpp>
-#include <boost/geometry/index/rtree.hpp>
 #include <boost/geometry/index/detail/rtree/utilities/statistics.hpp>
 #include <boost/foreach.hpp>
 #include <bits/stdc++.h>
@@ -16,6 +13,7 @@ namespace bgid = bgi::detail;
 #define CAPACITY 100
 
 // Visitor that counts the number of pointers in the RTree
+// it assists with size computation
 int pointerCount = 0;
 template <typename Value, typename Options, typename Translator, typename Box, typename Allocators>
 class pointer_visitor
@@ -108,10 +106,7 @@ int main(int argc, char** argv){
 	parseQueryFile(argv[2], queryArray);	 
 
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
-	//bgi::rtree<value, bgi::linear<CAPACITY>> rtree;
-	//bgi::rtree<value, bgi::quadratic<CAPACITY>> rtree;
 	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree;
-
 	for (auto q: dataArray){
 		point p(get<2>(q), get<1>(q));
 		rtree.insert(make_pair(p, get<0>(q)));
@@ -120,7 +115,6 @@ int main(int argc, char** argv){
 	cout << "Creation time: " << time << endl;
 
 	map<string, double> rangeLog, knnLog;
-	
 	for (auto q: queryArray){
 		if (get<0>(q) == 'r'){
 			float pl[2], ph[2], rs = get<3>(q);
@@ -137,9 +131,7 @@ int main(int argc, char** argv){
 			rangeLog["time " + to_string(rs)] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			rangeLog["count " + to_string(rs)]++;
 			
-			cout << "spatial query box:" << endl;
-			cout << bg::wkt<box>(queryBox) << endl;
-			cout << "spatial query results:" << endl;
+			cout << "Range query:" << bg::wkt<box>(queryBox) << endl;
 			BOOST_FOREACH(value const& v, result_s)
 				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
@@ -151,10 +143,9 @@ int main(int argc, char** argv){
 			knnLog["time " + to_string(get<3>(q))] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			knnLog["count " + to_string(get<3>(q))]++;
 
-			//cout << "knn query: " << bg::wkt<point>(point(queryPoint)) << endl;
-			//cout << "knn query results:" << endl;
-			//BOOST_FOREACH(value const& v, result_n)
-				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+			cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
+			BOOST_FOREACH(value const& v, result_n)
+				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
 	}
 
@@ -166,7 +157,7 @@ int main(int argc, char** argv){
 	for (auto it = knnLog.cbegin(); it != knnLog.cend(); ++it)  
 			cout<< it->first << ": " << it->second << endl; 
 
-	cout << "---Statistics---" << endl;
+	cout << "---RTree Statistics---" << endl;
 	tuple<size_t, size_t, size_t, size_t, size_t, size_t> S;
 	S = bgi::detail::rtree::utilities::statistics(rtree);
 
@@ -181,6 +172,4 @@ int main(int argc, char** argv){
 	cout << "Internal pointer count: " << pointerCount << endl;
 	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
 	 											+ pointerCount * 8) / float(1e6)<< endl; // internal pointer size
-	 									 									
-	return 0;
 }
