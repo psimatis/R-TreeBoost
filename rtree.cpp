@@ -1,3 +1,12 @@
+// Counters for node visits
+// Warning! 
+// 1. They need to be declared before the includes
+// 2. Boost files spatial_query.hpp and distance_query.hpp need to be modified
+int rangeInternalCount = 0;
+int rangeLeafCount = 0;
+int knnInternalCount = 0;
+int knnLeafCount = 0;
+
 #include <boost/geometry.hpp>
 #include <boost/geometry/index/detail/rtree/utilities/statistics.hpp>
 #include <boost/foreach.hpp>
@@ -177,4 +186,10 @@ int main(int argc, char** argv){
 	cout << "Internal pointer count: " << pointerCount << endl;
 	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
 	 											+ pointerCount * 8) / float(1e6)<< endl; // internal pointer size
+
+	cout << "---Node Visits---" << endl;
+	cout << "Range internal nodes: " << rangeInternalCount << endl;
+	cout << "Range leaf nodes: " << rangeLeafCount << endl;
+	cout << "kNN internal nodes: " << knnInternalCount << endl;
+	cout << "kNN leaf nodes: " << knnLeafCount << endl;
 }
