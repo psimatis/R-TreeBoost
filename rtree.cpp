@@ -12,14 +12,14 @@ int knnLeafCount = 0;
 #include <boost/foreach.hpp>
 #include <bits/stdc++.h>
 
+#define CAPACITY 250
+
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 
 using namespace std;
 using namespace std::chrono;
 namespace bgid = bgi::detail;
-
-#define CAPACITY 100
 
 // Visitor that counts the number of pointers in the RTree
 // it assists with size computation
@@ -101,7 +101,7 @@ int main(int argc, char** argv){
 		cout << "Usage: ./rtree dataFile queryFile" << endl;
 		exit(1);
 	}
-	
+
 	typedef bg::model::point<float, 2, bg::cs::cartesian> point;
 	typedef bg::model::box<point> box;
 	typedef pair<point, unsigned> value;
@@ -120,12 +120,14 @@ int main(int argc, char** argv){
 		point p(get<2>(q), get<1>(q));
 		contourCenters.push_back(p);
 	}
+	cout << "Done reading data file" << endl;
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
 	size_t id_gen = 0;
 	transform(contourCenters.begin(), contourCenters.end(), back_inserter(cloud), 
 	          [&](point const& p) { return make_pair(p, id_gen++); });
 	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree(cloud.begin(), cloud.end());
-	double time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+	//double time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+	double time = duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 	cout << "Creation time: " << time << endl;
 
 	map<string, double> rangeLog, knnLog;
@@ -142,12 +144,17 @@ int main(int argc, char** argv){
 			box queryBox(point(pl[0], pl[1]), point(ph[0], ph[1]));
 			startTime = high_resolution_clock::now();
 			rtree.query(bgi::intersects(queryBox), back_inserter(result_s));
-			rangeLog["time " + to_string(rs)] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+			//rangeLog["time " + to_string(rs)] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+			rangeLog["time " + to_string(rs)] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			rangeLog["count " + to_string(rs)]++;
-			
-			cout << "Range query:" << bg::wkt<box>(queryBox) << endl;
-			BOOST_FOREACH(value const& v, result_s)
-				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+			rangeLog["pages " + to_string(rs)] += rangeInternalCount + rangeLeafCount;
+			rangeLog["leaf " + to_string(rs)] += rangeLeafCount;
+			rangeLog["internal " + to_string(rs)] += rangeInternalCount;
+			rangeLeafCount = 0;
+			rangeInternalCount = 0;
+			//cout << "Range query:" << bg::wkt<box>(queryBox) << endl;
+			//BOOST_FOREACH(value const& v, result_s)
+				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
 		else if (get<0>(q) == 'k'){
 			vector<value> result_n;
@@ -155,11 +162,16 @@ int main(int argc, char** argv){
 			startTime = high_resolution_clock::now();
 			rtree.query(bgi::nearest(queryPoint, get<3>(q)), back_inserter(result_n));
 			knnLog["time " + to_string(get<3>(q))] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
+			knnLog["time " + to_string(get<3>(q))] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			knnLog["count " + to_string(get<3>(q))]++;
-
-			cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
-			BOOST_FOREACH(value const& v, result_n)
-				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+			knnLog["pages " + to_string(get<3>(q))] += knnInternalCount + knnLeafCount; 
+			knnLog["leaves " + to_string(get<3>(q))] += knnLeafCount; 
+			knnLog["internal " + to_string(get<3>(q))] += knnInternalCount; 
+			knnLeafCount = 0;
+			knnInternalCount = 0;
+			//cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
+			//BOOST_FOREACH(value const& v, result_n)
+				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
 	}
 
@@ -181,15 +193,9 @@ int main(int argc, char** argv){
 	cout << "Number of values: " << get<3>(S) << endl;  
 	cout << "Min values per node: " << get<4>(S) << endl;  
 	cout << "Max values per node: " << get<5>(S) << endl;  
-
+	cout << "Capacity: " << CAPACITY << endl;
 	pointerVisitor(rtree);
 	cout << "Internal pointer count: " << pointerCount << endl;
 	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
 	 											+ pointerCount * 8) / float(1e6)<< endl; // internal pointer size
-
-	cout << "---Node Visits---" << endl;
-	cout << "Range internal nodes: " << rangeInternalCount << endl;
-	cout << "Range leaf nodes: " << rangeLeafCount << endl;
-	cout << "kNN internal nodes: " << knnInternalCount << endl;
-	cout << "kNN leaf nodes: " << knnLeafCount << endl;
 }
