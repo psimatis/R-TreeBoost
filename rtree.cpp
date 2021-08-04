@@ -59,9 +59,9 @@ inline void pointerVisitor(Rtree const& tree){
     rtv.apply_visitor(v);
 }
 
-void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray) {
+void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray, int limit) {
 	string line;
-	//int i = 0;
+	int i = 0;
 	ifstream file(fileName);
 	if (file.is_open()) {
 		getline(file, line);
@@ -71,8 +71,8 @@ void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray)
 			istringstream buf(line);
 			buf >> id >> x >> y;
 			dataArray.emplace_back(make_tuple(id, x, y));
-			//i++;
-			//if (i >= 5000) break;
+			i++;
+			if (i >= limit) break;
 		}
 		file.close();
 	} else cout << "Cant open file: " << fileName << endl;
@@ -86,10 +86,10 @@ void parseQueryFile(string fileName, vector<tuple<char, float, float, float>> &q
 		getline(file, line);
 		while (getline(file, line)){
 			char type;
-			float x, y, size;
+			float x, y, info;
 			istringstream buf(line);
-			buf >> type >> x >> y >> size;
-			queryArray.emplace_back(make_tuple(type, x, y, size));
+			buf >> type >> x >> y >> info;
+			queryArray.emplace_back(make_tuple(type, x, y, info));
 		}
 		file.close();
 	} else cout << "Cant open file: " << fileName << endl;
@@ -97,8 +97,8 @@ void parseQueryFile(string fileName, vector<tuple<char, float, float, float>> &q
 
 int main(int argc, char** argv){
 
-	if (argc != 3){
-		cout << "Usage: ./rtree dataFile queryFile" << endl;
+	if (argc != 4){
+		cout << "Usage: ./rtree dataFile limit queryFile" << endl;
 		exit(1);
 	}
 
@@ -109,10 +109,10 @@ int main(int argc, char** argv){
 	vector<float> boundary = {180.0, -90.0, 180.0, 90.0};
 	
 	vector<tuple<int, float, float>> dataArray;        
-	parseDataFile(argv[1], dataArray);	 
+	parseDataFile(argv[1], dataArray, atoi(argv[2]));	 
 
 	vector<tuple<char, float, float, float>> queryArray;        	 
-	parseQueryFile(argv[2], queryArray);	 
+	parseQueryFile(argv[3], queryArray);	 
 
 	vector<point> contourCenters;
 	vector<value> cloud;
@@ -126,11 +126,13 @@ int main(int argc, char** argv){
 	cout << "Done parsing input data" << endl;
 
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
-	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree(cloud.begin(), cloud.end());
+	//bgi::rtree<value, bgi::rstar<CAPACITY>> rtree(cloud.begin(), cloud.end());
+	//bgi::rtree<value, bgi::linear<CAPACITY>> rtree(cloud.begin(), cloud.end());
+	bgi::rtree<value, bgi::quadratic<CAPACITY>> rtree(cloud.begin(), cloud.end());
 	double time = duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 	cout << "Creation time: " << time << endl;
 
-	map<string, double> rangeLog, knnLog;
+	map<string, double> rangeLog, knnLog, inLog;
 	for (auto q: queryArray){
 		if (get<0>(q) == 'r'){
 			float pl[2], ph[2], rs = get<3>(q);
@@ -171,7 +173,19 @@ int main(int argc, char** argv){
 			//BOOST_FOREACH(value const& v, result_n)
 				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
+		else if (get<0>(q) == 'i'){
+			point p(point(get<2>(q), get<1>(q)));
+			//auto pair = make_pair(p, get<3>(q));
+			startTime = high_resolution_clock::now();
+			rtree.insert(make_pair(p, get<3>(q)));
+			inLog["time"] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
+			inLog["count"]++;			
+		}
 	}
+
+	cout << "---Insertions---" << endl;
+	for (auto it = inLog.cbegin(); it != inLog.cend(); ++it)
+		cout << it->first << ": " << it->second << endl;
 
 	cout << "---Range---" << endl;
 	for (auto it = rangeLog.cbegin(); it != rangeLog.cend(); ++it)  
