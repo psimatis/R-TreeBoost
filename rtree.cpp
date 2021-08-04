@@ -12,7 +12,7 @@ int knnLeafCount = 0;
 #include <boost/foreach.hpp>
 #include <bits/stdc++.h>
 
-#define CAPACITY 250
+#define CAPACITY 1000
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
@@ -37,8 +37,6 @@ public:
         elements_type const& elements = bgid::rtree::elements(n);
 
 		pointerCount += elements.size();
-
-		cout << elements.size() << endl;
 
         for ( typename elements_type::const_iterator it = elements.begin(); it != elements.end() ; ++it){
             bgid::rtree::apply_visitor(*this, *(it->second));
