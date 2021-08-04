@@ -38,6 +38,8 @@ public:
 
 		pointerCount += elements.size();
 
+		cout << elements.size() << endl;
+
         for ( typename elements_type::const_iterator it = elements.begin(); it != elements.end() ; ++it){
             bgid::rtree::apply_visitor(*this, *(it->second));
         }
@@ -119,14 +121,14 @@ int main(int argc, char** argv){
 	for (auto q: dataArray){
 		point p(get<2>(q), get<1>(q));
 		contourCenters.push_back(p);
-	}
-	cout << "Done reading data file" << endl;
-	high_resolution_clock::time_point startTime = high_resolution_clock::now();
+	}	
 	size_t id_gen = 0;
 	transform(contourCenters.begin(), contourCenters.end(), back_inserter(cloud), 
 	          [&](point const& p) { return make_pair(p, id_gen++); });
+	cout << "Done parsing input data" << endl;
+
+	high_resolution_clock::time_point startTime = high_resolution_clock::now();
 	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree(cloud.begin(), cloud.end());
-	//double time = duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 	double time = duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 	cout << "Creation time: " << time << endl;
 
@@ -144,7 +146,6 @@ int main(int argc, char** argv){
 			box queryBox(point(pl[0], pl[1]), point(ph[0], ph[1]));
 			startTime = high_resolution_clock::now();
 			rtree.query(bgi::intersects(queryBox), back_inserter(result_s));
-			//rangeLog["time " + to_string(rs)] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			rangeLog["time " + to_string(rs)] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			rangeLog["count " + to_string(rs)]++;
 			rangeLog["pages " + to_string(rs)] += rangeInternalCount + rangeLeafCount;
@@ -161,7 +162,6 @@ int main(int argc, char** argv){
 			point queryPoint(point(get<2>(q), get<1>(q)));
 			startTime = high_resolution_clock::now();
 			rtree.query(bgi::nearest(queryPoint, get<3>(q)), back_inserter(result_n));
-			knnLog["time " + to_string(get<3>(q))] += duration_cast<duration<double>>(high_resolution_clock::now() - startTime).count();
 			knnLog["time " + to_string(get<3>(q))] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			knnLog["count " + to_string(get<3>(q))]++;
 			knnLog["pages " + to_string(get<3>(q))] += knnInternalCount + knnLeafCount; 
@@ -197,5 +197,6 @@ int main(int argc, char** argv){
 	pointerVisitor(rtree);
 	cout << "Internal pointer count: " << pointerCount << endl;
 	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
-	 											+ pointerCount * 8) / float(1e6)<< endl; // internal pointer size
+												+ (get<1>(S) + get<2>(S) * sizeof(int)) // int for element count
+	 											+ pointerCount * 8) / float(1e6) << endl; // internal pointer size
 }
