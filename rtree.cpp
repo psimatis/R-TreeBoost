@@ -195,6 +195,6 @@ int main(int argc, char** argv){
 	pointerVisitor(rtree);
 	cout << "Internal pointer count: " << pointerCount << endl;
 	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
-												+ (get<1>(S) + get<2>(S) * sizeof(int)) // int for element count
+												+ ((get<1>(S) + get<2>(S)) * sizeof(int)) // int for element count
 	 											+ pointerCount * 8) / float(1e6) << endl; // internal pointer size
 }
