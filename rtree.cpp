@@ -12,7 +12,7 @@ int knnLeafCount = 0;
 #include <boost/foreach.hpp>
 #include <bits/stdc++.h>
 
-#define CAPACITY 1000
+#define CAPACITY 512
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
@@ -122,7 +122,7 @@ int main(int argc, char** argv){
 	vector<tuple<int, float, float>> dataArray;        
 	parseDataFile(argv[1], dataArray, atoi(argv[2]));	 
 
-	vector<tuple<char, vector<float> float>> queryArray;        	 
+	vector<tuple<char, vector<float>, float>> queryArray;        	 
 	parseQueryFile(argv[3], queryArray);	 
 
 	vector<point> contourCenters;
@@ -147,8 +147,8 @@ int main(int argc, char** argv){
 	for (auto q: queryArray){
 		if (get<0>(q) == 'r'){
 			array<float, 4> query;
-    			for (uint i = 0; i < query.size(); i++)
-        			query[i] = get<1>(q)[i];
+    		for (uint i = 0; i < query.size(); i++)
+        		query[i] = get<1>(q)[i];
 			float rs = get<2>(q);
 			
 			vector<value> result_s;
@@ -168,14 +168,14 @@ int main(int argc, char** argv){
 		}
 		else if (get<0>(q) == 'k'){
 			array<float, 2> p;
-    			for (uint i = 0; i < p.size(); i++)
-        			p[i] = get<1>(q)[i];
-    			int k = get<2>(q);
+    		for (uint i = 0; i < p.size(); i++)
+        		p[i] = get<1>(q)[i];
+    		int k = get<2>(q);
 			
 			vector<value> result_n;
 			point queryPoint(point(p[0], p[1]));
 			startTime = high_resolution_clock::now();
-			rtree.query(bgi::nearest(queryPoint, k, back_inserter(result_n));
+			rtree.query(bgi::nearest(queryPoint, k), back_inserter(result_n));
 			knnLog["time " + to_string(k)] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			knnLog["count " + to_string(k)]++;
 			knnLog["pages " + to_string(k)] += knnInternalCount + knnLeafCount; 
@@ -189,12 +189,12 @@ int main(int argc, char** argv){
 		}
 		else if (get<0>(q) == 'i'){
 			array<float, 2> p;
-    			for (uint i = 0; i < p.size(); i++)
-        			p[i] = get<1>(q)[i];
-    			int id = get<2>(q);
+    		for (uint i = 0; i < p.size(); i++)
+        		p[i] = get<1>(q)[i];
+    		int id = get<2>(q);
 			
-			point p(point(p[0], p[1]));
-			auto pair = make_pair(p, get<3>(q));
+			point pNew(point(p[0], p[1]));
+			auto pair = make_pair(pNew, get<2>(q));
 			startTime = high_resolution_clock::now();
 			rtree.insert(pair);
 			//rtree.insert(make_pair(p, get<3>(q)));
