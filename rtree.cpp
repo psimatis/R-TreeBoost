@@ -78,22 +78,33 @@ void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray,
 	} else cout << "Cant open file: " << fileName << endl;
 } 
 
-void parseQueryFile(string fileName, vector<tuple<char, float, float, float>> &queryArray) {
-	string line;
-	int i = 0;
-	ifstream file(fileName);
-	if (file.is_open()) {
-		getline(file, line);
-		while (getline(file, line)){
-			char type;
-			float x, y, info;
-			istringstream buf(line);
-			buf >> type >> x >> y >> info;
-			queryArray.emplace_back(make_tuple(type, x, y, info));
-		}
-		file.close();
-	} else cout << "Cant open file: " << fileName << endl;
-} 
+void parseQueryFile(string fileName, vector<tuple<char, vector<float>, float>> &queryArray) {
+    cout << "Begin query parsing for R-Tree" << endl;
+    string line;
+    int i = 0;
+
+    ifstream file(fileName);
+    if (file.is_open()) {
+        // getline(file, line); // Skip the header line
+        while (getline(file, line)) {
+            char type = line[line.find_first_not_of(" ")];
+            vector<float> q;
+            line = line.substr(line.find_first_of(type) + 1);
+            const char *cs = line.c_str();
+            char *end;
+            int params = (type == 'r') ? 4 : 2;
+            for (uint d = 0; d < params; d++) {
+                q.emplace_back(strtof(cs, &end));
+                cs = end;
+            }
+            float info = strtof(cs, &end);
+            queryArray.emplace_back(make_tuple(type, q, info));
+            i++;
+        }
+        file.close();
+    }
+    cout << "Finish query parsing for R-Tree" << endl;
+}
 
 int main(int argc, char** argv){
 
@@ -111,7 +122,7 @@ int main(int argc, char** argv){
 	vector<tuple<int, float, float>> dataArray;        
 	parseDataFile(argv[1], dataArray, atoi(argv[2]));	 
 
-	vector<tuple<char, float, float, float>> queryArray;        	 
+	vector<tuple<char, vector<float> float>> queryArray;        	 
 	parseQueryFile(argv[3], queryArray);	 
 
 	vector<point> contourCenters;
@@ -135,15 +146,13 @@ int main(int argc, char** argv){
 	map<string, double> rangeLog, knnLog, inLog;
 	for (auto q: queryArray){
 		if (get<0>(q) == 'r'){
-			float pl[2], ph[2], rs = get<3>(q);
-			pl[0] = get<2>(q) - 0.01;         
-			pl[1] = get<1>(q) - 0.01;
-
-  			ph[0] = min(boundary[2], pl[0] + rs*(boundary[2] + abs(boundary[0])));
-  			ph[1] = min(boundary[3], pl[1] + rs*(boundary[3] + abs(boundary[1])));
-
+			array<float, 4> query;
+    			for (uint i = 0; i < query.size(); i++)
+        			query[i] = get<1>(q)[i];
+			float rs = get<2>(q);
+			
 			vector<value> result_s;
-			box queryBox(point(pl[0], pl[1]), point(ph[0], ph[1]));
+			box queryBox(point(query[0], query[1]), point(query[2], query[3]));
 			startTime = high_resolution_clock::now();
 			rtree.query(bgi::intersects(queryBox), back_inserter(result_s));
 			rangeLog["time " + to_string(rs)] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
@@ -158,15 +167,20 @@ int main(int argc, char** argv){
 				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
 		else if (get<0>(q) == 'k'){
+			array<float, 2> p;
+    			for (uint i = 0; i < p.size(); i++)
+        			p[i] = get<1>(q)[i];
+    			int k = get<2>(q);
+			
 			vector<value> result_n;
-			point queryPoint(point(get<2>(q), get<1>(q)));
+			point queryPoint(point(p[0], p[1]));
 			startTime = high_resolution_clock::now();
-			rtree.query(bgi::nearest(queryPoint, get<3>(q)), back_inserter(result_n));
-			knnLog["time " + to_string(get<3>(q))] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
-			knnLog["count " + to_string(get<3>(q))]++;
-			knnLog["pages " + to_string(get<3>(q))] += knnInternalCount + knnLeafCount; 
-			knnLog["leaves " + to_string(get<3>(q))] += knnLeafCount; 
-			knnLog["internal " + to_string(get<3>(q))] += knnInternalCount; 
+			rtree.query(bgi::nearest(queryPoint, k, back_inserter(result_n));
+			knnLog["time " + to_string(k)] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
+			knnLog["count " + to_string(k)]++;
+			knnLog["pages " + to_string(k)] += knnInternalCount + knnLeafCount; 
+			knnLog["leaves " + to_string(k)] += knnLeafCount; 
+			knnLog["internal " + to_string(k)] += knnInternalCount; 
 			knnLeafCount = 0;
 			knnInternalCount = 0;
 			//cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
@@ -174,10 +188,16 @@ int main(int argc, char** argv){
 				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
 		}
 		else if (get<0>(q) == 'i'){
-			point p(point(get<2>(q), get<1>(q)));
-			//auto pair = make_pair(p, get<3>(q));
+			array<float, 2> p;
+    			for (uint i = 0; i < p.size(); i++)
+        			p[i] = get<1>(q)[i];
+    			int id = get<2>(q);
+			
+			point p(point(p[0], p[1]));
+			auto pair = make_pair(p, get<3>(q));
 			startTime = high_resolution_clock::now();
-			rtree.insert(make_pair(p, get<3>(q)));
+			rtree.insert(pair);
+			//rtree.insert(make_pair(p, get<3>(q)));
 			inLog["time"] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			inLog["count"]++;			
 		}
