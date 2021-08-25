@@ -14,6 +14,8 @@ int knnLeafCount = 0;
 
 #define CAPACITY 512
 
+#define dist(x1, y1, x2, y2) (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)
+
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
 
@@ -71,6 +73,7 @@ void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray,
 			istringstream buf(line);
 			buf >> id >> x >> y;
 			dataArray.emplace_back(make_tuple(id, x, y));
+			
 			i++;
 			if (i >= limit) break;
 		}
@@ -81,7 +84,6 @@ void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray,
 void parseQueryFile(string fileName, vector<tuple<char, vector<float>, float>> &queryArray) {
     cout << "Begin query parsing for R-Tree" << endl;
     string line;
-    int i = 0;
 
     ifstream file(fileName);
     if (file.is_open()) {
@@ -99,7 +101,6 @@ void parseQueryFile(string fileName, vector<tuple<char, vector<float>, float>> &
             }
             float info = strtof(cs, &end);
             queryArray.emplace_back(make_tuple(type, q, info));
-            i++;
         }
         file.close();
     }
@@ -128,7 +129,7 @@ int main(int argc, char** argv){
 	vector<point> contourCenters;
 	vector<value> cloud;
 	for (auto q: dataArray){
-		point p(get<2>(q), get<1>(q));
+		point p(get<1>(q), get<2>(q));
 		contourCenters.push_back(p);
 	}	
 	size_t id_gen = 0;
@@ -162,9 +163,10 @@ int main(int argc, char** argv){
 			rangeLog["internal " + to_string(rs)] += rangeInternalCount;
 			rangeLeafCount = 0;
 			rangeInternalCount = 0;
-			//cout << "Range query:" << bg::wkt<box>(queryBox) << endl;
-			//BOOST_FOREACH(value const& v, result_s)
-				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+			cout << "Range query:" << bg::wkt<box>(queryBox) << endl;
+			BOOST_FOREACH(value const& v, result_s)
+				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+			cout << "results size: " << result_s.size() << endl;
 		}
 		else if (get<0>(q) == 'k'){
 			array<float, 2> p;
@@ -183,9 +185,10 @@ int main(int argc, char** argv){
 			knnLog["internal " + to_string(k)] += knnInternalCount; 
 			knnLeafCount = 0;
 			knnInternalCount = 0;
-			//cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
-			//BOOST_FOREACH(value const& v, result_n)
-				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+			cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
+			BOOST_FOREACH(value const& v, result_n)
+				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+				
 		}
 		else if (get<0>(q) == 'i'){
 			array<float, 2> p;
