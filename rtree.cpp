@@ -9,12 +9,11 @@ int knnLeafCount = 0;
 
 #include <boost/geometry.hpp>
 #include <boost/geometry/index/detail/rtree/utilities/statistics.hpp>
+#include <boost/geometry/index/detail/rtree/utilities/print.hpp>
 #include <boost/foreach.hpp>
 #include <bits/stdc++.h>
 
 #define CAPACITY 512
-
-#define dist(x1, y1, x2, y2) (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
@@ -95,7 +94,7 @@ void parseQueryFile(string fileName, vector<tuple<char, vector<float>, float>> &
             const char *cs = line.c_str();
             char *end;
             int params = (type == 'r') ? 4 : 2;
-            for (uint d = 0; d < params; d++) {
+            for (int d = 0; d < params; d++) {
                 q.emplace_back(strtof(cs, &end));
                 cs = end;
             }
@@ -138,9 +137,9 @@ int main(int argc, char** argv){
 	cout << "Done parsing input data" << endl;
 
 	high_resolution_clock::time_point startTime = high_resolution_clock::now();
-	//bgi::rtree<value, bgi::rstar<CAPACITY>> rtree(cloud.begin(), cloud.end());
+	bgi::rtree<value, bgi::rstar<CAPACITY>> rtree(cloud.begin(), cloud.end());
 	//bgi::rtree<value, bgi::linear<CAPACITY>> rtree(cloud.begin(), cloud.end());
-	bgi::rtree<value, bgi::quadratic<CAPACITY>> rtree(cloud.begin(), cloud.end());
+	//bgi::rtree<value, bgi::quadratic<CAPACITY>> rtree(cloud.begin(), cloud.end());
 	double time = duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 	cout << "Creation time: " << time << endl;
 
@@ -148,7 +147,7 @@ int main(int argc, char** argv){
 	for (auto q: queryArray){
 		if (get<0>(q) == 'r'){
 			array<float, 4> query;
-    		for (uint i = 0; i < query.size(); i++)
+    		for (int i = 0; i < query.size(); i++)
         		query[i] = get<1>(q)[i];
 			float rs = get<2>(q);
 			
@@ -163,10 +162,10 @@ int main(int argc, char** argv){
 			rangeLog["internal " + to_string(rs)] += rangeInternalCount;
 			rangeLeafCount = 0;
 			rangeInternalCount = 0;
-			cout << "Range query:" << bg::wkt<box>(queryBox) << endl;
-			BOOST_FOREACH(value const& v, result_s)
-				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
-			cout << "results size: " << result_s.size() << endl;
+			//cout << "Range query:" << bg::wkt<box>(queryBox) << endl;
+			//BOOST_FOREACH(value const& v, result_s)
+				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
+			//cout << "results size: " << result_s.size() << endl;
 		}
 		else if (get<0>(q) == 'k'){
 			array<float, 2> p;
@@ -185,10 +184,9 @@ int main(int argc, char** argv){
 			knnLog["internal " + to_string(k)] += knnInternalCount; 
 			knnLeafCount = 0;
 			knnInternalCount = 0;
-			cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
-			BOOST_FOREACH(value const& v, result_n)
-				cout << bg::wkt<point>(v.first) << " - " << v.second << endl;
-				
+			//cout << "kNN query: " << bg::wkt<point>(point(queryPoint)) << endl;
+			//BOOST_FOREACH(value const& v, result_n)
+				//cout << bg::wkt<point>(v.first) << " - " << v.second << endl;			
 		}
 		else if (get<0>(q) == 'i'){
 			array<float, 2> p;
@@ -197,14 +195,21 @@ int main(int argc, char** argv){
     		int id = get<2>(q);
 			
 			point pNew(point(p[0], p[1]));
-			auto pair = make_pair(pNew, get<2>(q));
+			auto pair = make_pair(pNew, id);
 			startTime = high_resolution_clock::now();
 			rtree.insert(pair);
-			//rtree.insert(make_pair(p, get<3>(q)));
 			inLog["time"] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
-			inLog["count"]++;			
+			inLog["count"]++;
+			//if (long(inLog["count"]) % long(1e4) == 0)
+				//cerr << "Count: " << inLog["count"] << endl;			
 		}
 	}
+
+	filebuf fb;
+ 	fb.open ("STR", ios::out);
+ 	ostream os(&fb);
+	bgi::detail::rtree::utilities::print(os, rtree);
+ 	fb.close();
 
 	cout << "---Insertions---" << endl;
 	for (auto it = inLog.cbegin(); it != inLog.cend(); ++it)
