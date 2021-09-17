@@ -13,7 +13,7 @@ int knnLeafCount = 0;
 #include <boost/foreach.hpp>
 #include <bits/stdc++.h>
 
-#define CAPACITY 512
+#define CAPACITY 2048
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
@@ -65,7 +65,7 @@ void parseDataFile(string fileName, vector<tuple<int, float, float>> &dataArray,
 	int i = 0;
 	ifstream file(fileName);
 	if (file.is_open()) {
-		getline(file, line);
+		//getline(file, line);
 		while (getline(file, line)){
 			int id;
 			float x, y;
@@ -90,6 +90,10 @@ void parseQueryFile(string fileName, vector<tuple<char, vector<float>, float>> &
         while (getline(file, line)) {
             char type = line[line.find_first_not_of(" ")];
             vector<float> q;
+            if (type == 'l') {
+            	queryArray.emplace_back(make_tuple(type, q, 0));
+            	continue;	
+            }
             line = line.substr(line.find_first_of(type) + 1);
             const char *cs = line.c_str();
             char *end;
@@ -117,7 +121,7 @@ int main(int argc, char** argv){
 	typedef bg::model::box<point> box;
 	typedef pair<point, unsigned> value;
 	
-	vector<float> boundary = {180.0, -90.0, 180.0, 90.0};
+	//vector<float> boundary = {180.0, -90.0, 180.0, 90.0};
 	
 	vector<tuple<int, float, float>> dataArray;        
 	parseDataFile(argv[1], dataArray, atoi(argv[2]));	 
@@ -198,45 +202,53 @@ int main(int argc, char** argv){
 			auto pair = make_pair(pNew, id);
 			startTime = high_resolution_clock::now();
 			rtree.insert(pair);
-			inLog["time"] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			inLog["count"]++;
+			inLog["time"] += duration_cast<microseconds>(high_resolution_clock::now() - startTime).count();
 			//if (long(inLog["count"]) % long(1e4) == 0)
 				//cerr << "Count: " << inLog["count"] << endl;			
 		}
+		else {	
+			/*filebuf fb;
+		 	fb.open ("STR", ios::out);
+		 	ostream os(&fb);
+			bgi::detail::rtree::utilities::print(os, rtree);
+		 	fb.close();*/
+
+			cout << "---Insertions---" << endl;
+			for (auto it = inLog.begin(); it != inLog.end(); ++it) {
+				cout << it->first << ": " << it->second << endl;
+				it->second = 0;
+			}
+
+			cout << "---Range---" << endl;
+			for (auto it = rangeLog.begin(); it != rangeLog.end(); ++it){  
+				cout<< it->first << ": " << it->second << endl;   
+				it->second = 0;
+			}
+
+			cout << "---KNN---" << endl;
+			for (auto it = knnLog.begin(); it != knnLog.end(); ++it){  
+				cout<< it->first << ": " << it->second << endl; 
+				it->second = 0;
+			}
+
+			cout << "---RTree Statistics---" << endl;
+			tuple<size_t, size_t, size_t, size_t, size_t, size_t> S;
+			S = bgi::detail::rtree::utilities::statistics(rtree);
+
+			cout << "Number of levels: " << get<0>(S) << endl;  
+			cout << "Number of internal nodes: " << get<1>(S) << endl;  
+			cout << "Number of leaf nodes: " << get<2>(S) << endl;  
+			cout << "Number of values: " << get<3>(S) << endl;  
+			cout << "Min values per node: " << get<4>(S) << endl;  
+			cout << "Max values per node: " << get<5>(S) << endl;  
+			cout << "Capacity: " << CAPACITY << endl;
+			pointerVisitor(rtree);
+			cout << "Internal pointer count: " << pointerCount << endl;
+			cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
+														+ ((get<1>(S) + get<2>(S)) * sizeof(int)) // int for element count
+			 											+ pointerCount * 8) / float(1e6) << endl; // internal pointer size
+			pointerCount = 0;
+		}
 	}
-
-	filebuf fb;
- 	fb.open ("STR", ios::out);
- 	ostream os(&fb);
-	bgi::detail::rtree::utilities::print(os, rtree);
- 	fb.close();
-
-	cout << "---Insertions---" << endl;
-	for (auto it = inLog.cbegin(); it != inLog.cend(); ++it)
-		cout << it->first << ": " << it->second << endl;
-
-	cout << "---Range---" << endl;
-	for (auto it = rangeLog.cbegin(); it != rangeLog.cend(); ++it)  
-		cout<< it->first << ": " << it->second << endl;   
-
-	cout << "---KNN---" << endl;
-	for (auto it = knnLog.cbegin(); it != knnLog.cend(); ++it)  
-			cout<< it->first << ": " << it->second << endl; 
-
-	cout << "---RTree Statistics---" << endl;
-	tuple<size_t, size_t, size_t, size_t, size_t, size_t> S;
-	S = bgi::detail::rtree::utilities::statistics(rtree);
-
-	cout << "Number of levels: " << get<0>(S) << endl;  
-	cout << "Number of internal nodes: " << get<1>(S) << endl;  
-	cout << "Number of leaf nodes: " << get<2>(S) << endl;  
-	cout << "Number of values: " << get<3>(S) << endl;  
-	cout << "Min values per node: " << get<4>(S) << endl;  
-	cout << "Max values per node: " << get<5>(S) << endl;  
-	cout << "Capacity: " << CAPACITY << endl;
-	pointerVisitor(rtree);
-	cout << "Internal pointer count: " << pointerCount << endl;
-	cout << "RTree size in MB (correct): " << ((get<1>(S) + get<2>(S)) * 4 * sizeof(float) // rectangle size
-												+ ((get<1>(S) + get<2>(S)) * sizeof(int)) // int for element count
-	 											+ pointerCount * 8) / float(1e6) << endl; // internal pointer size
 }
